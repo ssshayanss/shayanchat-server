@@ -35,7 +35,7 @@ module.exports = server => {
         });
 
         socket.on('edit room', (data, callback) => {
-            roomController.editRoom(socket, data, callback);
+            roomController.editRoom(io, socket, data, callback);
         });
 
         socket.on('leave room', (data, callback) => {

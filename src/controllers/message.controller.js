@@ -1,14 +1,14 @@
 const Message = require('../models/message.model');
 const Room = require('../models/room.model');
 const User = require('../models/user.model');
-const { getCurrentDate } = require('../functions');
+const { getCurrentDate, groupday } = require('../functions');
 
 module.exports = {
     getMessages: async (socket, data, callback) => {
         try {
             const { roomId } = await data;
             const room = await Room.findOne({ id: roomId }).populate('messages');
-            if(!room) callback({ success: false, error: 'گروه یافت نشد', messages: [] });
+            if(!room) callback({ success: false, error: 'گروه یافت نشد', messages: {} });
             else if(room.members.includes(socket.user._id)) {
                 const messages = [];
                 for(let i=0; i<room.messages.length; i++) {
@@ -16,8 +16,8 @@ module.exports = {
                     const messageData = {
                         id: room.messages[i]._id,
                         sender: {
-                            name: sender.name,
-                            profilePicture: sender.profilePicture ? sender.profilePicture : null,
+                            name: sender ? sender.name : 'deleted account',
+                            profilePicture: (sender && sender.profilePicture) ? sender.profilePicture : null,
                         },
                         text: room.messages[i].text,
                         date: room.messages[i].date,
@@ -26,8 +26,9 @@ module.exports = {
                     };
                     messages.push(messageData);
                 }
-                callback({ success: true, messages });
-            } else callback({ success: false, error: 'ابتدا عضو گروه شوید', messages: [] });
+                const sortedMessages = await groupday(messages); 
+                callback({ success: true, messages: sortedMessages });
+            } else callback({ success: false, error: 'ابتدا عضو گروه شوید', messages: {} });
         } catch (error) {
             callback({ success: false, error: 'خطای سرور!!!' });
         }
@@ -92,7 +93,7 @@ module.exports = {
                 const messageIndex = await room.messages.indexOf(messageId);
                 if(messageIndex !== -1) await room.messages.splice(messageIndex, 1);
                 await room.save();
-                io.in(roomId).emit('new message', { roomId, deleteMessage: message._id });
+                io.in(roomId).emit('new message', { roomId, deleteMessage: { id: message._id, date: message.date } });
             }
         } catch (error) {}
     }

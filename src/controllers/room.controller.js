@@ -20,7 +20,7 @@ module.exports = {
             callback({ success: false, message: 'خطای سرور!!!' });
         }
     },
-    editRoom: async (socket, data, callback) => {
+    editRoom: async (io, socket, data, callback) => {
         try {
             const { id, roomName, roomPicture } = await data;
             const room = await Room.findOne({ id }).populate('owner');
@@ -28,7 +28,7 @@ module.exports = {
                 if(roomName.trim() !== '') room.name = await roomName.trim();
                 if(roomPicture.data) {
                     const { success, message } = validateImageFile(roomPicture);
-                    if(!success) callback({ success: false, message });
+                    if(!success) return callback({ success: false, message });
                     else {
                         const fileName = await uploadImage(roomPicture, 'roomPicture');
                         if(room.roomPicture) await deleteImage(room.roomPicture, 'roomPicture');
@@ -36,6 +36,9 @@ module.exports = {
                     }
                 }
                 await room.save();
+                const roomData = { id: room.id, name: room.name };
+                if(room.roomPicture) roomData.roomPicture = room.roomPicture;
+                io.in(id).emit('change room data', { room: roomData });
                 callback({ success: true, message: 'تغییرات با موفقیت انجام شد' });
             } else callback({ success: false, message: 'شما اجازه‌ی ایجاد تغییر در این گروه را ندارید' });
         } catch (error) {
@@ -87,36 +90,32 @@ module.exports = {
     getRooms: async (socket, data, callback) => {
         try {
             const { search } = await data;
+            const rooms = [];
+            const roomData = {};
             if(search) {
                 // search in rooms by short id
                 const room = await Room.findOne({ id: search }).populate('owner');
                 if(room) {
-                    const roomData = {
-                        id: room.id,
-                        name: room.name,
-                        isOwner: (room.owner._id.toString()===socket.user._id.toString())
-                    };
-                    if(room.roomPicture) roomData.roomPicture = await room.roomPicture;
+                    roomData.id = room.id;
+                    roomData.name = room.name;
+                    roomData.isOwner = (room.owner._id.toString()===socket.user._id.toString())
+                    if(room.roomPicture) roomData.roomPicture = room.roomPicture;
                     callback({ success: true, rooms: [roomData] });
                 }
                 else {
                     // search in rooms by name
-                    const rooms = [];
                     const findedRooms = await Room.find({ name: new RegExp(search, 'i') }).populate('owner');
                     for(let i=0; i<findedRooms.length; i++) {
-                        const roomData = {
-                            id: findedRooms[i].id,
-                            name: findedRooms[i].name,
-                            isOwner: (findedRooms[i].owner._id.toString()===socket.user._id.toString())
-                        };
-                        if(findedRooms[i].roomPicture) roomData.roomPicture = await findedRooms[i].roomPicture;
+                        roomData.id = findedRooms[i].id;
+                        roomData.name = findedRooms[i].name;
+                        roomData.isOwner = (findedRooms[i].owner._id.toString()===socket.user._id.toString());
+                        if(findedRooms[i].roomPicture) roomData.roomPicture = findedRooms[i].roomPicture;
                         rooms.push(roomData);
                     }    
                     callback({ success: true, rooms });
                 }
             } else {
                 // find all user rooms
-                const rooms = [];
                 const user = await User.findById(socket.user._id).populate('rooms');
                 for(let i=0; i<user.rooms.length; i++) {
                     const room = await user.rooms[i].populate('owner');

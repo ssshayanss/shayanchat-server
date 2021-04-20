@@ -40,3 +40,13 @@ exports.getCurrentDate = () => {
     const time = new Date();
     return `${date}-${time.getHours()}:${time.getMinutes()}`;
 };
+
+exports.groupday = async messages => {
+    let byday = {};
+    messages.map(message => {
+        let d = message['date'].split('-')[0];
+        if(!byday[d]) byday[d] = [];
+        byday[d].push(message);
+    });
+    return byday;
+};
