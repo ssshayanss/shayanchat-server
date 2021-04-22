@@ -1,5 +1,5 @@
 const User = require('../models/user.model');
-const { validateImageFile, uploadImage, deleteImage, getCurrentDate } = require('../functions');
+const { validateImageFile, uploadImage, deleteImage, getLocaleDateString } = require('../functions');
 
 module.exports = { 
     signup: async (req, res) => {
@@ -105,7 +105,7 @@ module.exports = {
     },
     logout: async socket => {
         try {
-            const lastSeen = getCurrentDate();
+            const lastSeen = getLocaleDateString();
             await User.findByIdAndUpdate(socket.user._id, { isOnline: false, lastSeen });                   
         } catch (error) {}
     },

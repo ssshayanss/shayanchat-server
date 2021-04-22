@@ -46,8 +46,12 @@ module.exports = server => {
             roomController.deleteRoom(socket, data, callback);
         });
 
-        socket.on('get rooms', (data,callback) => {
-            roomController.getRooms(socket, data, callback);
+        socket.on('get rooms', callback => {
+            roomController.getRooms(socket, callback);
+        });
+
+        socket.on('search rooms', (data, callback) => {
+            roomController.searchRooms(data, callback);
         });
 
         socket.on('get room', (data,callback) => {
@@ -58,8 +62,12 @@ module.exports = server => {
             roomController.joinRoom(socket, data, callback);
         });
 
+        socket.on('join to rooms', () => {
+            roomController.joinToRooms(socket);
+        });
+
         socket.on('get room members', (data, callback) => {
-            roomController.getRoomMembers(socket, data, callback);
+            roomController.getRoomMembers(data, callback);
         });
 
         socket.on('get messages', (data, callback) => {

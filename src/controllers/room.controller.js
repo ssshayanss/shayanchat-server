@@ -1,23 +1,31 @@
 const Room = require('../models/room.model');
 const User = require('../models/user.model');
-const { validateImageFile, uploadImage, deleteImage } = require('../functions');
+const { validateImageFile, uploadImage, deleteImage, slugify } = require('../functions');
 
 module.exports = {
     createNewRoom: async (socket, data, callback) => {
         try {
             const { roomName, roomPicture } = await data;
-            const room = new Room({ name: roomName, owner: socket.user._id });
-            await room.generateID();
-            await room.members.push(socket.user._id);
-            if(roomPicture.data) {
-                const { success } = validateImageFile(roomPicture);
-                if(success) room.roomPicture = await uploadImage(roomPicture, 'roomPicture');
+            const response = slugify(roomName);
+            if(!response.success) return callback({ success: false, message: response.message});
+            else {
+                const room = new Room({ name: roomName, slugName: response.slugName, owner: socket.user._id });
+                await room.generateID();
+                await room.members.push(socket.user._id);
+                if(roomPicture.data) {
+                    const { success } = validateImageFile(roomPicture);
+                    if(success) room.roomPicture = await uploadImage(roomPicture, 'roomPicture');
+                }
+                await User.findByIdAndUpdate(socket.user._id, {$push: {"rooms": room._id}});
+                await room.save();
+                const roomData = { id: room.id, name: room.name };
+                if(room.roomPicture) roomData.roomPicture = await room.roomPicture;
+                return callback({ success: true, message: `گروه ${roomName} ساخته شد`, roomData });         
             }
-            await User.findByIdAndUpdate(socket.user._id, {$push: {"rooms": room._id}});
-            await room.save();
-            callback({ success: true, message: `گروه ${roomName} ساخته شد` });         
         } catch (error) {
-            callback({ success: false, message: 'خطای سرور!!!' });
+            return error.code === 11000 
+                ? callback({ success: false, message: 'گروهی با این نام وجود دارد' })
+                : callback({ success: false, message: 'خطای سرور!!!' });
         }
     },
     editRoom: async (io, socket, data, callback) => {
@@ -74,12 +82,11 @@ module.exports = {
             else if(room.owner._id.toString() !== socket.user._id.toString()) 
                 callback({ success: false, message: 'شما اجازه‌ی حذف این گروه را ندارید' });
             else {
-                const user = await User.findById(socket.user._id);
-                const roomIndex = await user.rooms.indexOf(room._id);
-                if(roomIndex !== -1) user.rooms.splice(roomIndex, 1);
+                const roomIndex = await room.owner.rooms.indexOf(room._id);
+                if(roomIndex !== -1) room.owner.rooms.splice(roomIndex, 1);
                 if(room.roomPicture) await deleteImage(room.roomPicture, 'roomPicture');
-                await user.save();
-                await room.messages.map(message => message.remove());
+                await room.owner.save();
+                await room.messages.map(async message => { await message.remove() });
                 await room.remove();
                 callback({ success: true, message: 'گروه موردنظر پاک شد' });
             }
@@ -87,51 +94,43 @@ module.exports = {
             callback({ success: false, message: 'خطای سرور!!!' });
         }
     },
-    getRooms: async (socket, data, callback) => {
+    getRooms: async (socket, callback) => {
         try {
-            const { search } = await data;
             const rooms = [];
-            const roomData = {};
-            if(search) {
-                // search in rooms by short id
-                const room = await Room.findOne({ id: search }).populate('owner');
-                if(room) {
-                    roomData.id = room.id;
-                    roomData.name = room.name;
-                    roomData.isOwner = (room.owner._id.toString()===socket.user._id.toString())
-                    if(room.roomPicture) roomData.roomPicture = room.roomPicture;
-                    callback({ success: true, rooms: [roomData] });
-                }
-                else {
-                    // search in rooms by name
-                    const findedRooms = await Room.find({ name: new RegExp(search, 'i') }).populate('owner');
-                    for(let i=0; i<findedRooms.length; i++) {
-                        roomData.id = findedRooms[i].id;
-                        roomData.name = findedRooms[i].name;
-                        roomData.isOwner = (findedRooms[i].owner._id.toString()===socket.user._id.toString());
-                        if(findedRooms[i].roomPicture) roomData.roomPicture = findedRooms[i].roomPicture;
-                        rooms.push(roomData);
-                    }    
-                    callback({ success: true, rooms });
-                }
-            } else {
-                // find all user rooms
-                const user = await User.findById(socket.user._id).populate('rooms');
-                for(let i=0; i<user.rooms.length; i++) {
-                    const room = await user.rooms[i].populate('owner');
-                    const roomData = {
-                        id: room.id,
-                        name: room.name,
-                        isOwner: (room.owner._id.toString()===socket.user._id.toString())
-                    }
-                    if(room.roomPicture) roomData.roomPicture = await room.roomPicture;
-                    rooms.push(roomData);
-                    socket.join(room.id);
-                }
-                callback({ success: true, rooms });
+            const user = await User.findById(socket.user._id).populate('rooms');
+            for(let i=0; i<user.rooms.length; i++) {
+                const roomData = { id: user.rooms[i].id, name: user.rooms[i].name };
+                if(user.rooms[i].roomPicture) roomData.roomPicture = await user.rooms[i].roomPicture;
+                rooms.push(roomData);
             }
+            callback({ success: true, rooms }); 
         } catch (error) {
             callback({ success: false, error: 'خطای سرور!!!' });
+        }
+    },
+    searchRooms: async (data, callback) => {
+        try {
+            let { search } = await data;
+            search = search.trim();
+            if(search) {
+                const room = await Room.findOne({ id: search });
+                if(room) {
+                    const roomData = { id: room.id, name: room.name };
+                    if(room.roomPicture) roomData.roomPicture = room.roomPicture;
+                    return callback({ success: true, rooms: [roomData] });
+                } else {
+                    const rooms = [];
+                    const findedRooms = await Room.find({ name: new RegExp(search, 'i') });
+                    for(let i=0; i<findedRooms.length; i++) {
+                        const roomData = { id: findedRooms[i].id, name: findedRooms[i].name };
+                        if(findedRooms[i].roomPicture) roomData.roomPicture = findedRooms[i].roomPicture;
+                        rooms.push(roomData);
+                    }
+                    return callback({ success: true, rooms });                
+                }
+            }
+        } catch (error) {
+            return callback({ success: false, error: 'خطای سرور!!!' });
         }
     },
     getRoom: async (socket, data, callback) => {
@@ -147,7 +146,7 @@ module.exports = {
             callback({ success: false, error: 'خطای سرور!!!' });
         }
     },
-    getRoomMembers: async (socket, data, callback) => {
+    getRoomMembers: async (data, callback) => {
         try {
             const { id } = await data;
             const room = await Room.findOne({ id }).populate('owner').populate('members');
@@ -170,7 +169,7 @@ module.exports = {
             callback({ success: false, error: 'خطای سرور!!!' });
         }
     },
-    joinRoom: async(socket, data, callback) => {
+    joinRoom: async (socket, data, callback) => {
         try {
             const { id } = await data;
             const room = await Room.findOne({ id });
@@ -180,10 +179,19 @@ module.exports = {
                 await room.members.push(socket.user._id);
                 await User.findByIdAndUpdate(socket.user._id, {$push: {"rooms": room._id}});
                 await room.save();
+                socket.join(room.id);
                 callback({ success: true, message: 'شما عضو این گروه شدید' });
             }
         } catch (error) {
             callback({ success: false, message: 'خطای سرور!!!' });
         }
+    },
+    joinToRooms: async socket => {
+        const user = await User.findById(socket.user._id).populate('rooms');
+        if(user) {
+            for(let i=0; i<user.rooms.length; i++) {
+                socket.join(user.rooms[i].id);
+            }
+        } 
     }
 };

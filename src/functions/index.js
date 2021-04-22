@@ -29,24 +29,35 @@ exports.deleteImage = async (fileName, fileCategory) => {
         const filePath = `${__dirname}/../../public/${fileCategory}s/${fileName}`;
         const isExists = fs.existsSync(filePath);
         if(isExists) fs.unlinkSync(filePath);
-        return true;
+        return { success: true };
     } catch (error) {
-        return false;
+        return { success: false };
     }
 };
 
-exports.getCurrentDate = () => {
-    const date = new Date().toLocaleDateString('fa-IR').replace(/([۰-۹])/g, token => String.fromCharCode(token.charCodeAt(0) - 1728));;
-    const time = new Date();
-    return `${date}-${time.getHours()}:${time.getMinutes()}`;
+exports.getLocaleDateString = () => {
+    const date = new Date().toLocaleDateString('fa-IR').replace(/([۰-۹])/g, token => String.fromCharCode(token.charCodeAt(0) - 1728));
+    const time = new Date().toLocaleTimeString('fa-IR').replace(/([۰-۹])/g, token => String.fromCharCode(token.charCodeAt(0) - 1728)).split(':');
+    return `${date}-${time[0]}:${time[1]}`;
 };
 
-exports.groupday = async messages => {
-    let byday = {};
+exports.groupByDay = async messages => {
+    let daysArray = {};
     messages.map(message => {
-        let d = message['date'].split('-')[0];
-        if(!byday[d]) byday[d] = [];
-        byday[d].push(message);
+        let date = message['date'].split('-')[0];
+        if(!daysArray[date]) daysArray[date] = [];
+        daysArray[date].push(message);
     });
-    return byday;
+    return daysArray;
+};
+
+exports.slugify = str => {
+    const isExists = str.includes('-');
+    if(isExists) return { success: false, message: 'اجازه‌ی استفاده از کاراکتر (-) را ندارید' };
+    else {
+        const words = str.trim().split(/\s+/);
+        let slugName = '';
+        words.map((word, index) => { slugName += index===0 ? word : `-${word}`; });
+        return { success: true, slugName };
+    }
 };

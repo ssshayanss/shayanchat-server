@@ -9,7 +9,15 @@ const RoomSchema = new mongoose.Schema({
     },
     name: {
         type: String,
-        required: true
+        required: true,
+        trim: true
+    },
+    slugName: {
+        type: String, 
+        required: true,
+        trim: true,
+        unique: true,
+        lowercase: true
     },
     roomPicture: { type: String },
     owner: {

@@ -10,11 +10,11 @@ exports.signinRequired = async (req, res, next) => {
             if(user) {
                 req.user = await user;
                 next();
-            } else return res.status(403).json({ success: false, message: 'شما اجازه‌ی دسترسی به این بخش را ندارید' }); 
-        } else return res.status(403).json({ success: false, message: 'شما اجازه‌ی دسترسی به این بخش را ندارید' }); 
+            } else return res.status(403).json({ success: false, message: 'خطای دسترسی!!!' }); 
+        } else return res.status(403).json({ success: false, message: 'خطای دسترسی!!!' }); 
     } catch (error) {
         if(error instanceof jwt.JsonWebTokenError)
-            return res.status(403).json({ success: false, message: 'شما اجازه‌ی دسترسی به این بخش را ندارید' });         
+            return res.status(403).json({ success: false, message: 'خطای دسترسی!!!' });         
         else return res.status(500).json({ success: false, message: 'خطای سرور!!!' }); 
     }
 };

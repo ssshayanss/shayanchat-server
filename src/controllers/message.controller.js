@@ -1,7 +1,7 @@
 const Message = require('../models/message.model');
 const Room = require('../models/room.model');
 const User = require('../models/user.model');
-const { getCurrentDate, groupday } = require('../functions');
+const { getLocaleDateString, groupByDay } = require('../functions');
 
 module.exports = {
     getMessages: async (socket, data, callback) => {
@@ -26,7 +26,7 @@ module.exports = {
                     };
                     messages.push(messageData);
                 }
-                const sortedMessages = await groupday(messages); 
+                const sortedMessages = await groupByDay(messages); 
                 callback({ success: true, messages: sortedMessages });
             } else callback({ success: false, error: 'ابتدا عضو گروه شوید', messages: {} });
         } catch (error) {
@@ -36,7 +36,7 @@ module.exports = {
     sendMessage: async (io, socket, data) => {
         try {
             const { message, roomId } = await data;
-            const fullDate = getCurrentDate();
+            const fullDate = getLocaleDateString();
             const newMessage = new Message({
                 sender: socket.user._id,
                 text: message,
@@ -79,9 +79,7 @@ module.exports = {
                 };
                 io.in(roomId).emit('new message', { roomId, updateMessage: updateMessageData });
             }
-        } catch (error) {
-            console.log(error);
-        }
+        } catch (error) {}
     },
     deleteMessage: async (io, socket, data) => {
         try {
