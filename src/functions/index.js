@@ -36,8 +36,9 @@ exports.deleteImage = async (fileName, fileCategory) => {
 };
 
 exports.getLocaleDateString = () => {
-    const date = new Date().toLocaleDateString('fa-IR').replace(/([۰-۹])/g, token => String.fromCharCode(token.charCodeAt(0) - 1728));
-    const time = new Date().toLocaleTimeString('fa-IR').replace(/([۰-۹])/g, token => String.fromCharCode(token.charCodeAt(0) - 1728)).split(':');
+    // .replace(/([۰-۹])/g, token => String.fromCharCode(token.charCodeAt(0) - 1728))
+    const date = new Date().toLocaleDateString('fa-IR');
+    const time = new Date().toLocaleTimeString('fa-IR', { timeZone: 'Asia/Tehran' }).split(':');
     return `${date}-${time[0]}:${time[1]}`;
 };
 
