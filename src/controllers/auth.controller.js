@@ -1,5 +1,17 @@
+const nodemailer = require('nodemailer');
+const jwt = require('jsonwebtoken');
+const path = require('path');
+
 const User = require('../models/user.model');
 const { validateImageFile, uploadImage, deleteImage, getLocaleDateString } = require('../functions');
+
+const transporter = nodemailer.createTransport({
+    service: process.env.TRANSPORTER_SERVICE,
+    auth: {
+        user: process.env.TRANSPORTER_USER,
+        pass: process.env.TRANSPORTER_PASS
+    }
+});
 
 module.exports = { 
     signup: async (req, res) => {
@@ -41,6 +53,59 @@ module.exports = {
         };
         if(user.profilePicture) data.profilePicture = user.profilePicture;
         return res.status(200).json({ success: true, user: data });
+    },
+    sendResetPasswordEmail: async (req, res) => {
+        try {
+            const { email } = await req.body;
+            const user = await User.findOne({ email });
+            if(user) {
+                const token = jwt.sign({ _id: user._id }, process.env.JWT_PRIVATE_KEY, { expiresIn: '15m' });
+                const emailOptions = {
+                    from: 'no-reply@shayanchat.com', to: user.email, subject: 'بازیابی رمزعبور',
+                    html: 
+                    `
+                        <p>برای بازیابی رمزعبور روی لینک زیر کلیک کنید</p>
+                        <a href='${process.env.ENDPOINT}/reset-password/${token}'>بازیابی رمزعبور</a>
+                    `
+                };
+                await transporter.sendMail(emailOptions);
+                return res.status(200).json({ success: true, message: 'لینک بازیابی رمزعبور برای شما ارسال گردید' });
+            } else return res.status(200).json({ success: true, message: 'لینک بازیابی رمزعبور برای شما ارسال گردید' });
+        } catch (error) {
+            return res.status(500).json({ success: false, message: 'خطای سرور!!!' });
+        }
+    },
+    getResetPasswordPage: async (req, res) => {
+        try {
+            const { token } = await req.params;
+            const { _id } = jwt.verify(token, process.env.JWT_PRIVATE_KEY);
+            const user = await User.findById(_id);
+            return user ? res.status(200).sendFile(path.join(__dirname, '../../public/forget-password.html')) : res.status(403).send('خطای دسترسی'); 
+        } catch (error) {
+            if(error instanceof jwt.JsonWebTokenError) return res.status(403).send('خطای دسترسی'); 
+            else return res.status(500).send('خطای سرور'); 
+        }
+    },
+    resetPassword: async (req, res) => {
+        try {
+            const { token } = await req.params;
+            const { password } = await req.body;
+            const { _id } = jwt.verify(token, process.env.JWT_PRIVATE_KEY);
+            const user = await User.findById(_id);
+            if(user) {
+                const isMatch = await user.comparePassword(password);
+                if(isMatch) return res.status(400).json({ success: false, message: 'رمزعبور انتخاب شده مشابه رمزعبور فعلی شماست', type: 'badRequest' });
+                else {
+                    user.password = password;
+                    await user.save();
+                    return res.status(200).json({ success: true, message: 'رمزعبور با موفقیت تغییر یافت' }); 
+                }
+            } else return res.status(403).json({ success: false, message: 'خطای دسترسی!!!', type: 'accessDenied' });
+        } catch (error) {
+            if(error instanceof jwt.JsonWebTokenError) 
+                return res.status(403).json({ success: false, message: 'زمان اعتبار این صفحه به پایان رسیده است', type: 'accessDenied' });
+            else return res.status(500).json({ success: false, message: 'خطای سرور', type: 'serverError' }); 
+        }
     },
     editUser: async (socket, data, callback) => {
         try {

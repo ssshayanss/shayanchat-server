@@ -28,6 +28,12 @@ exports.validateSigninReq = [
         .isLength({ min: 8 }).withMessage('نام‌کاربری یا رمزعبور نامعتبر است')
 ];
 
+exports.validateResetPasswordReq = [
+    check('email')
+        .notEmpty().withMessage('ایمیل خود را وارد کنید')
+        .matches(emailPattern).withMessage('لطفا یک ایمیل معتبر وارد کنید')
+];
+
 exports.isValidate = (req, res, next) => {
     const errors = validationResult(req);
     if(errors.array().length) return res.status(400).json({ success: false, message: errors.array()[0].msg });
