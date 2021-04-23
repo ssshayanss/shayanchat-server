@@ -18,6 +18,7 @@ module.exports = {
                 }
                 await User.findByIdAndUpdate(socket.user._id, {$push: {"rooms": room._id}});
                 await room.save();
+                socket.join(room.id);
                 const roomData = { id: room.id, name: room.name };
                 if(room.roomPicture) roomData.roomPicture = await room.roomPicture;
                 return callback({ success: true, message: `گروه ${roomName} ساخته شد`, roomData });         
